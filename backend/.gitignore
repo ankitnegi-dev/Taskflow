@@ -5,4 +5,3 @@ dist/
 logs/
 coverage/
 .nyc_output/
-prisma/migrations/
