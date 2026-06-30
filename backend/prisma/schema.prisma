@@ -1,5 +1,5 @@
 // ===================================================
-// TaskFlow — Prisma Schema
+// TaskFlow - Prisma Schema
 // ===================================================
 
 generator client {
@@ -30,17 +30,26 @@ enum TaskPriority {
   HIGH
 }
 
+enum TaskEnergy {
+  FOCUS
+  CREATIVE
+  ADMIN
+  MEETING
+  CHORE
+}
+
 // ─── Models ───────────────────────────────────────
 
 model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      Role     @default(USER)
-  tasks     Task[]   @relation("UserTasks")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String          @id @default(uuid())
+  name           String
+  email          String          @unique
+  password       String
+  role           Role            @default(USER)
+  tasks          Task[]          @relation("UserTasks")
+  weeklyReceipts WeeklyReceipt[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   @@index([email])
   @@map("users")
@@ -52,6 +61,17 @@ model Task {
   description String?
   status      TaskStatus   @default(TODO)
   priority    TaskPriority @default(MEDIUM)
+  dueDate     DateTime?
+
+  // ── Commitment Mirror fields ──
+  // What the user planned to do, and when
+  plannedStart DateTime?
+  plannedEnd   DateTime?
+  // What actually happened, captured via daily review
+  actualStart DateTime?
+  actualEnd   DateTime?
+  completed   Boolean    @default(false)
+  energy      TaskEnergy?
 
   createdById String
   createdBy   User   @relation("UserTasks", fields: [createdById], references: [id], onDelete: Cascade)
@@ -63,5 +83,22 @@ model Task {
   @@index([status])
   @@index([priority])
   @@index([createdAt])
+  @@index([plannedStart])
   @@map("tasks")
+}
+
+model WeeklyReceipt {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weekStart     DateTime
+  plannedHours  Float
+  actualHours   Float
+  truthScore    Float
+  aiSummary     String?
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, weekStart])
+  @@index([userId])
+  @@map("weekly_receipts")
 }
