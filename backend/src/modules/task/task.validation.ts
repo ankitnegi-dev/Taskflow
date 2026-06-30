@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { TaskStatus, TaskPriority } from '../../types';
 import { TaskEnergy } from '@prisma/client';
 
-export const createTaskSchema = z.object({
+const baseTaskSchema = z.object({
   title: z
     .string({ required_error: 'Title is required' })
     .min(1, 'Title cannot be empty')
@@ -23,9 +23,25 @@ export const createTaskSchema = z.object({
       errorMap: () => ({ message: `Priority must be one of: ${Object.values(TaskPriority).join(', ')}` }),
     })
     .default(TaskPriority.MEDIUM),
+  dueDate: z.coerce.date().optional(),
+  // -- Commitment Mirror: when the user plans to work on this --
+  plannedStart: z.coerce.date().optional(),
+  plannedEnd: z.coerce.date().optional(),
+  energy: z.nativeEnum(TaskEnergy).optional(),
 });
 
-export const updateTaskSchema = createTaskSchema.partial();
+const plannedRangeRefinement = (data: { plannedStart?: Date; plannedEnd?: Date }) =>
+  !data.plannedStart || !data.plannedEnd || data.plannedEnd >= data.plannedStart;
+
+export const createTaskSchema = baseTaskSchema.refine(plannedRangeRefinement, {
+  message: 'plannedEnd must be after plannedStart',
+  path: ['plannedEnd'],
+});
+
+export const updateTaskSchema = baseTaskSchema.partial().refine(plannedRangeRefinement, {
+  message: 'plannedEnd must be after plannedStart',
+  path: ['plannedEnd'],
+});
 
 export const taskQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -39,7 +55,7 @@ export const taskQuerySchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
-// ─── Commitment Mirror schemas ─────────────────────────────────────
+// --- Commitment Mirror schemas ---------------------------------------
 
 export const submitActualSchema = z
   .object({
