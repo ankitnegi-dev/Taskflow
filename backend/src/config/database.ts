@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { logger } from '../utils/logger';
 
 declare global {
@@ -6,24 +6,24 @@ declare global {
   var __prisma: PrismaClient | undefined;
 }
 
+const logOptions: Prisma.LogDefinition[] = [
+  { emit: 'event', level: 'query' },
+  { emit: 'event', level: 'error' },
+  { emit: 'event', level: 'warn' },
+];
+
 // Prevent multiple Prisma instances in development (hot reload)
-const prisma = global.__prisma || new PrismaClient({
-  log: [
-    { emit: 'event', level: 'query' },
-    { emit: 'event', level: 'error' },
-    { emit: 'event', level: 'warn' },
-  ],
-});
+const prisma = global.__prisma || new PrismaClient({ log: logOptions });
 
 if (process.env.NODE_ENV !== 'production') {
   global.__prisma = prisma;
 }
 
-prisma.$on('error', (e) => {
+prisma.$on('error' as never, (e: Prisma.LogEvent) => {
   logger.error('Prisma error:', e);
 });
 
-prisma.$on('warn', (e) => {
+prisma.$on('warn' as never, (e: Prisma.LogEvent) => {
   logger.warn('Prisma warning:', e);
 });
 
