@@ -1,5 +1,5 @@
 import { prisma } from '../../config/database';
-import { Task, Prisma } from '@prisma/client';
+import { Task, Prisma, TaskEnergy } from '@prisma/client';
 import { TaskQueryDto, CreateTaskDto, UpdateTaskDto } from './task.validation';
 import { UserRole } from '../../types';
 
@@ -63,5 +63,48 @@ export class TaskRepository {
 
   async delete(id: string): Promise<Task> {
     return prisma.task.delete({ where: { id } });
+  }
+
+  // ─── Commitment Mirror methods ──────────────────────────────────
+
+  async submitActual(
+    id: string,
+    data: {
+      actualStart?: Date;
+      actualEnd?: Date;
+      completed: boolean;
+      energy?: TaskEnergy;
+    }
+  ): Promise<Task> {
+    return prisma.task.update({
+      where: { id },
+      data,
+      include: { createdBy: { select: { id: true, name: true, email: true } } },
+    });
+  }
+
+  async findByWeek(userId: string, weekStart: Date, weekEnd: Date): Promise<Task[]> {
+    return prisma.task.findMany({
+      where: {
+        createdById: userId,
+        OR: [
+          { plannedStart: { gte: weekStart, lte: weekEnd } },
+          { actualStart: { gte: weekStart, lte: weekEnd } },
+        ],
+      },
+      orderBy: { plannedStart: 'asc' },
+    });
+  }
+
+  async findByDay(userId: string, dayStart: Date, dayEnd: Date): Promise<Task[]> {
+    return prisma.task.findMany({
+      where: {
+        createdById: userId,
+        OR: [
+          { plannedStart: { gte: dayStart, lte: dayEnd } },
+          { actualStart: { gte: dayStart, lte: dayEnd } },
+        ],
+      },
+    });
   }
 }

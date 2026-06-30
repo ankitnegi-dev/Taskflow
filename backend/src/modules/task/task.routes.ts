@@ -5,6 +5,9 @@ import {
   createTask,
   updateTask,
   deleteTask,
+  submitActual,
+  getWeeklySummary,
+  getDailyTruthScore,
 } from './task.controller';
 import { authenticate } from '../../middleware/auth.middleware';
 import { validate } from '../../middleware/validate.middleware';
@@ -13,6 +16,9 @@ import {
   createTaskSchema,
   updateTaskSchema,
   taskQuerySchema,
+  submitActualSchema,
+  weeklySummaryQuerySchema,
+  dailyTruthScoreQuerySchema,
 } from './task.validation';
 
 const router = Router();
@@ -65,6 +71,57 @@ router.get('/', validate(taskQuerySchema, 'query'), asyncWrapper(getTasks));
 
 /**
  * @swagger
+ * /api/v1/tasks/weekly-summary:
+ *   get:
+ *     summary: Get planned vs actual hours summary for a week
+ *     tags: [Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: weekStart
+ *         required: true
+ *         schema: { type: string, format: date }
+ *         description: ISO date for the start of the week
+ *     responses:
+ *       200:
+ *         description: Weekly summary with truth score
+ *       422:
+ *         description: Validation error
+ */
+router.get(
+  '/weekly-summary',
+  validate(weeklySummaryQuerySchema, 'query'),
+  asyncWrapper(getWeeklySummary)
+);
+
+/**
+ * @swagger
+ * /api/v1/tasks/daily-truth-score:
+ *   get:
+ *     summary: Get planned vs actual hours and truth score for a single day
+ *     tags: [Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         required: true
+ *         schema: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: Daily truth score
+ *       422:
+ *         description: Validation error
+ */
+router.get(
+  '/daily-truth-score',
+  validate(dailyTruthScoreQuerySchema, 'query'),
+  asyncWrapper(getDailyTruthScore)
+);
+
+/**
+ * @swagger
  * /api/v1/tasks/{id}:
  *   get:
  *     summary: Get a task by ID
@@ -112,6 +169,43 @@ router.get('/:id', asyncWrapper(getTaskById));
  *         description: Validation error
  */
 router.post('/', validate(createTaskSchema), asyncWrapper(createTask));
+
+/**
+ * @swagger
+ * /api/v1/tasks/{id}/actual:
+ *   post:
+ *     summary: Submit a daily review for a task (what actually happened)
+ *     tags: [Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [completed]
+ *             properties:
+ *               actualStart: { type: string, format: date-time }
+ *               actualEnd: { type: string, format: date-time }
+ *               completed: { type: boolean }
+ *               energy: { type: string, enum: [FOCUS, CREATIVE, ADMIN, MEETING, CHORE] }
+ *     responses:
+ *       200:
+ *         description: Daily review submitted
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Task not found
+ *       422:
+ *         description: Validation error
+ */
+router.post('/:id/actual', validate(submitActualSchema), asyncWrapper(submitActual));
 
 /**
  * @swagger

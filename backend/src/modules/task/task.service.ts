@@ -1,5 +1,10 @@
 import { TaskRepository } from './task.repository';
-import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './task.validation';
+import {
+  CreateTaskDto,
+  UpdateTaskDto,
+  TaskQueryDto,
+  SubmitActualDto,
+} from './task.validation';
 import { UserRole } from '../../types';
 import { buildPaginationMeta } from '../../utils/response';
 
@@ -40,6 +45,91 @@ export class TaskService {
     this.ensureExists(task);
     this.ensureOwnership(task!, userId, userRole);
     return this.repo.delete(id);
+  }
+
+  // ─── Commitment Mirror methods ──────────────────────────────────
+
+  async submitActual(
+    id: string,
+    dto: SubmitActualDto,
+    userId: string,
+    userRole: UserRole
+  ) {
+    const task = await this.repo.findById(id);
+    this.ensureExists(task);
+    this.ensureOwnership(task!, userId, userRole);
+    return this.repo.submitActual(id, dto);
+  }
+
+  async getWeeklySummary(weekStart: Date, userId: string) {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+
+    const tasks = await this.repo.findByWeek(userId, weekStart, weekEnd);
+
+    let plannedHours = 0;
+    let actualHours = 0;
+
+    for (const task of tasks) {
+      if (task.plannedStart && task.plannedEnd) {
+        plannedHours +=
+          (task.plannedEnd.getTime() - task.plannedStart.getTime()) / 3_600_000;
+      }
+      if (task.actualStart && task.actualEnd) {
+        actualHours +=
+          (task.actualEnd.getTime() - task.actualStart.getTime()) / 3_600_000;
+      }
+    }
+
+    const truthScore =
+      plannedHours > 0
+        ? Math.min(100, Math.max(0, (actualHours / plannedHours) * 100))
+        : 0;
+
+    return {
+      weekStart,
+      weekEnd,
+      plannedHours: Number(plannedHours.toFixed(2)),
+      actualHours: Number(actualHours.toFixed(2)),
+      truthScore: Number(truthScore.toFixed(1)),
+      taskCount: tasks.length,
+      completedCount: tasks.filter((t) => t.completed).length,
+    };
+  }
+
+  async getDailyTruthScore(date: Date, userId: string) {
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(date);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const tasks = await this.repo.findByDay(userId, dayStart, dayEnd);
+
+    let plannedHours = 0;
+    let actualHours = 0;
+
+    for (const task of tasks) {
+      if (task.plannedStart && task.plannedEnd) {
+        plannedHours +=
+          (task.plannedEnd.getTime() - task.plannedStart.getTime()) / 3_600_000;
+      }
+      if (task.actualStart && task.actualEnd) {
+        actualHours +=
+          (task.actualEnd.getTime() - task.actualStart.getTime()) / 3_600_000;
+      }
+    }
+
+    const truthScore =
+      plannedHours > 0
+        ? Math.min(100, Math.max(0, (actualHours / plannedHours) * 100))
+        : 0;
+
+    return {
+      date: dayStart,
+      plannedHours: Number(plannedHours.toFixed(2)),
+      actualHours: Number(actualHours.toFixed(2)),
+      truthScore: Number(truthScore.toFixed(1)),
+    };
   }
 
   // ─── Private Helpers ─────────────────────────────────────────────────────────

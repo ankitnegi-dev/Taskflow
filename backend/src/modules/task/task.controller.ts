@@ -2,7 +2,14 @@ import { Response } from 'express';
 import { TaskService } from './task.service';
 import { AuthenticatedRequest, UserRole } from '../../types';
 import { sendSuccess, sendCreated, sendNoContent } from '../../utils/response';
-import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './task.validation';
+import {
+  CreateTaskDto,
+  UpdateTaskDto,
+  TaskQueryDto,
+  SubmitActualDto,
+  WeeklySummaryQueryDto,
+  DailyTruthScoreQueryDto,
+} from './task.validation';
 
 const taskService = new TaskService();
 
@@ -54,4 +61,32 @@ export const deleteTask = async (req: AuthenticatedRequest, res: Response): Prom
     req.user!.role as UserRole
   );
   sendNoContent(res);
+};
+
+// ─── Commitment Mirror handlers ─────────────────────────────────
+
+/** POST /api/v1/tasks/:id/actual */
+export const submitActual = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const dto = req.body as SubmitActualDto;
+  const task = await taskService.submitActual(
+    req.params.id,
+    dto,
+    req.user!.userId,
+    req.user!.role as UserRole
+  );
+  sendSuccess(res, task, 'Daily review submitted successfully');
+};
+
+/** GET /api/v1/tasks/weekly-summary */
+export const getWeeklySummary = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { weekStart } = req.query as unknown as WeeklySummaryQueryDto;
+  const summary = await taskService.getWeeklySummary(weekStart, req.user!.userId);
+  sendSuccess(res, summary, 'Weekly summary retrieved successfully');
+};
+
+/** GET /api/v1/tasks/daily-truth-score */
+export const getDailyTruthScore = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { date } = req.query as unknown as DailyTruthScoreQueryDto;
+  const score = await taskService.getDailyTruthScore(date, req.user!.userId);
+  sendSuccess(res, score, 'Daily truth score retrieved successfully');
 };

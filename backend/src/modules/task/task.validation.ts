@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TaskStatus, TaskPriority } from '../../types';
+import { TaskEnergy } from '@prisma/client';
 
 export const createTaskSchema = z.object({
   title: z
@@ -38,6 +39,35 @@ export const taskQuerySchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
+// ─── Commitment Mirror schemas ─────────────────────────────────────
+
+export const submitActualSchema = z
+  .object({
+    actualStart: z.coerce.date().optional(),
+    actualEnd: z.coerce.date().optional(),
+    completed: z.boolean({ required_error: 'completed is required' }),
+    energy: z.nativeEnum(TaskEnergy).optional(),
+  })
+  .refine(
+    (data) => !data.actualStart || !data.actualEnd || data.actualEnd >= data.actualStart,
+    { message: 'actualEnd must be after actualStart', path: ['actualEnd'] }
+  );
+
+export const weeklySummaryQuerySchema = z.object({
+  weekStart: z.coerce.date({
+    required_error: 'weekStart is required (ISO date string)',
+  }),
+});
+
+export const dailyTruthScoreQuerySchema = z.object({
+  date: z.coerce.date({
+    required_error: 'date is required (ISO date string)',
+  }),
+});
+
 export type CreateTaskDto = z.infer<typeof createTaskSchema>;
 export type UpdateTaskDto = z.infer<typeof updateTaskSchema>;
 export type TaskQueryDto = z.infer<typeof taskQuerySchema>;
+export type SubmitActualDto = z.infer<typeof submitActualSchema>;
+export type WeeklySummaryQueryDto = z.infer<typeof weeklySummaryQuerySchema>;
+export type DailyTruthScoreQueryDto = z.infer<typeof dailyTruthScoreQuerySchema>;
