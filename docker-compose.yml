@@ -1,0 +1,89 @@
+version: '3.9'
+
+services:
+  # ─── PostgreSQL ───────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: taskflow_db
+    environment:
+      POSTGRES_DB: taskflow
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "55432:5432"
+    networks:
+      - taskflow_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d taskflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis (caching placeholder) ──────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: taskflow_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - taskflow_net
+    command: redis-server --save 20 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+
+  # ─── Backend API ──────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: taskflow_api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/taskflow?schema=public
+      JWT_SECRET: your_super_secret_jwt_key_at_least_32_chars
+      JWT_EXPIRES_IN: 7d
+      JWT_REFRESH_SECRET: your_refresh_token_secret
+      BCRYPT_ROUNDS: 12
+      CORS_ORIGIN: http://localhost:3000
+      REDIS_URL: redis://redis:6379
+      REDIS_ENABLED: "false"
+    ports:
+      - "5000:5000"
+    networks:
+      - taskflow_net
+    volumes:
+      - backend_logs:/app/logs
+    restart: unless-stopped
+
+  # ─── Frontend ─────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: taskflow_web
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:5000/api/v1
+    ports:
+      - "3000:3000"
+    networks:
+      - taskflow_net
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_logs:
+
+networks:
+  taskflow_net:
+    driver: bridge
