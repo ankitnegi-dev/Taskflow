@@ -81,9 +81,22 @@ export const dailyTruthScoreQuerySchema = z.object({
   }),
 });
 
+export const generateReceiptSchema = z.object({
+  weekStart: z.coerce.date({
+    required_error: 'weekStart is required (ISO date string)',
+  }),
+});
+
+export const listReceiptsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+});
+
 export type CreateTaskDto = z.infer<typeof createTaskSchema>;
 export type UpdateTaskDto = z.infer<typeof updateTaskSchema>;
 export type TaskQueryDto = z.infer<typeof taskQuerySchema>;
 export type SubmitActualDto = z.infer<typeof submitActualSchema>;
 export type WeeklySummaryQueryDto = z.infer<typeof weeklySummaryQuerySchema>;
 export type DailyTruthScoreQueryDto = z.infer<typeof dailyTruthScoreQuerySchema>;
+export type GenerateReceiptDto = z.infer<typeof generateReceiptSchema>;
+export type ListReceiptsQueryDto = z.infer<typeof listReceiptsQuerySchema>;

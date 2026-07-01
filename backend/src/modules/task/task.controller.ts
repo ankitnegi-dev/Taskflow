@@ -9,6 +9,8 @@ import {
   SubmitActualDto,
   WeeklySummaryQueryDto,
   DailyTruthScoreQueryDto,
+  GenerateReceiptDto,
+  ListReceiptsQueryDto,
 } from './task.validation';
 
 const taskService = new TaskService();
@@ -63,7 +65,7 @@ export const deleteTask = async (req: AuthenticatedRequest, res: Response): Prom
   sendNoContent(res);
 };
 
-// ─── Commitment Mirror handlers ─────────────────────────────────
+// --- Commitment Mirror: task-level handlers --------------------------
 
 /** POST /api/v1/tasks/:id/actual */
 export const submitActual = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -89,4 +91,20 @@ export const getDailyTruthScore = async (req: AuthenticatedRequest, res: Respons
   const { date } = req.query as unknown as DailyTruthScoreQueryDto;
   const score = await taskService.getDailyTruthScore(date, req.user!.userId);
   sendSuccess(res, score, 'Daily truth score retrieved successfully');
+};
+
+// --- Commitment Mirror: WeeklyReceipt handlers ------------------------
+
+/** POST /api/v1/tasks/weekly-receipts/generate */
+export const generateWeeklyReceipt = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { weekStart } = req.body as GenerateReceiptDto;
+  const receipt = await taskService.generateWeeklyReceipt(weekStart, req.user!.userId);
+  sendCreated(res, receipt, 'Weekly receipt generated successfully');
+};
+
+/** GET /api/v1/tasks/weekly-receipts */
+export const listWeeklyReceipts = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { page, limit } = req.query as unknown as ListReceiptsQueryDto;
+  const { receipts, meta } = await taskService.listWeeklyReceipts(req.user!.userId, page, limit);
+  sendSuccess(res, receipts, 'Weekly receipts retrieved successfully', 200, meta);
 };

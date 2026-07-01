@@ -1,5 +1,5 @@
 import { prisma } from '../../config/database';
-import { Task, Prisma, TaskEnergy } from '@prisma/client';
+import { Task, WeeklyReceipt, Prisma, TaskEnergy } from '@prisma/client';
 import { TaskQueryDto, CreateTaskDto, UpdateTaskDto } from './task.validation';
 import { UserRole } from '../../types';
 
@@ -12,7 +12,6 @@ export class TaskRepository {
     const { page, limit, status, priority, search, sortBy, sortOrder } = query;
     const skip = (page - 1) * limit;
 
-    // Build WHERE clause — ADMIN sees all, USER sees only own
     const where: Prisma.TaskWhereInput = {
       ...(userRole !== UserRole.ADMIN && { createdById: userId }),
       ...(status && { status }),
@@ -65,7 +64,7 @@ export class TaskRepository {
     return prisma.task.delete({ where: { id } });
   }
 
-  // ─── Commitment Mirror methods ──────────────────────────────────
+  // --- Commitment Mirror: task-level methods --------------------------
 
   async submitActual(
     id: string,
@@ -104,6 +103,62 @@ export class TaskRepository {
           { plannedStart: { gte: dayStart, lte: dayEnd } },
           { actualStart: { gte: dayStart, lte: dayEnd } },
         ],
+      },
+    });
+  }
+
+  // --- Commitment Mirror: WeeklyReceipt persistence --------------------
+
+  async upsertWeeklyReceipt(
+    userId: string,
+    weekStart: Date,
+    data: {
+      plannedHours: number;
+      actualHours: number;
+      truthScore: number;
+      aiSummary?: string;
+    }
+  ): Promise<WeeklyReceipt> {
+    return prisma.weeklyReceipt.upsert({
+      where: {
+        userId_weekStart: { userId, weekStart },
+      },
+      update: data,
+      create: {
+        userId,
+        weekStart,
+        ...data,
+      },
+    });
+  }
+
+  async findWeeklyReceipts(
+    userId: string,
+    page: number,
+    limit: number
+  ): Promise<{ receipts: WeeklyReceipt[]; total: number }> {
+    const skip = (page - 1) * limit;
+
+    const [receipts, total] = await prisma.$transaction([
+      prisma.weeklyReceipt.findMany({
+        where: { userId },
+        skip,
+        take: limit,
+        orderBy: { weekStart: 'desc' },
+      }),
+      prisma.weeklyReceipt.count({ where: { userId } }),
+    ]);
+
+    return { receipts, total };
+  }
+
+  async findWeeklyReceiptByWeek(
+    userId: string,
+    weekStart: Date
+  ): Promise<WeeklyReceipt | null> {
+    return prisma.weeklyReceipt.findUnique({
+      where: {
+        userId_weekStart: { userId, weekStart },
       },
     });
   }

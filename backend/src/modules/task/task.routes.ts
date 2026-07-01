@@ -8,6 +8,8 @@ import {
   submitActual,
   getWeeklySummary,
   getDailyTruthScore,
+  generateWeeklyReceipt,
+  listWeeklyReceipts,
 } from './task.controller';
 import { authenticate } from '../../middleware/auth.middleware';
 import { validate } from '../../middleware/validate.middleware';
@@ -19,6 +21,8 @@ import {
   submitActualSchema,
   weeklySummaryQuerySchema,
   dailyTruthScoreQuerySchema,
+  generateReceiptSchema,
+  listReceiptsQuerySchema,
 } from './task.validation';
 
 const router = Router();
@@ -73,7 +77,7 @@ router.get('/', validate(taskQuerySchema, 'query'), asyncWrapper(getTasks));
  * @swagger
  * /api/v1/tasks/weekly-summary:
  *   get:
- *     summary: Get planned vs actual hours summary for a week
+ *     summary: Get planned vs actual hours summary for a week (computed, not saved)
  *     tags: [Tasks]
  *     security:
  *       - bearerAuth: []
@@ -118,6 +122,62 @@ router.get(
   '/daily-truth-score',
   validate(dailyTruthScoreQuerySchema, 'query'),
   asyncWrapper(getDailyTruthScore)
+);
+
+/**
+ * @swagger
+ * /api/v1/tasks/weekly-receipts:
+ *   get:
+ *     summary: List saved weekly receipts (paginated, most recent first)
+ *     tags: [Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 10 }
+ *     responses:
+ *       200:
+ *         description: Weekly receipts retrieved
+ *       422:
+ *         description: Validation error
+ */
+router.get(
+  '/weekly-receipts',
+  validate(listReceiptsQuerySchema, 'query'),
+  asyncWrapper(listWeeklyReceipts)
+);
+
+/**
+ * @swagger
+ * /api/v1/tasks/weekly-receipts/generate:
+ *   post:
+ *     summary: Generate and save (or update) the weekly receipt for a given week
+ *     tags: [Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [weekStart]
+ *             properties:
+ *               weekStart: { type: string, format: date }
+ *     responses:
+ *       201:
+ *         description: Weekly receipt generated and saved
+ *       422:
+ *         description: Validation error
+ */
+router.post(
+  '/weekly-receipts/generate',
+  validate(generateReceiptSchema),
+  asyncWrapper(generateWeeklyReceipt)
 );
 
 /**

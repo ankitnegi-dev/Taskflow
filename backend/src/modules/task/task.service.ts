@@ -7,6 +7,7 @@ import {
 } from './task.validation';
 import { UserRole } from '../../types';
 import { buildPaginationMeta } from '../../utils/response';
+import { Task } from '@prisma/client';
 
 export class TaskService {
   private repo = new TaskRepository();
@@ -47,7 +48,7 @@ export class TaskService {
     return this.repo.delete(id);
   }
 
-  // ─── Commitment Mirror methods ──────────────────────────────────
+  // --- Commitment Mirror: task-level methods ----------------------
 
   async submitActual(
     id: string,
@@ -62,36 +63,16 @@ export class TaskService {
   }
 
   async getWeeklySummary(weekStart: Date, userId: string) {
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 7);
-
+    const weekEnd = this.addDays(weekStart, 7);
     const tasks = await this.repo.findByWeek(userId, weekStart, weekEnd);
-
-    let plannedHours = 0;
-    let actualHours = 0;
-
-    for (const task of tasks) {
-      if (task.plannedStart && task.plannedEnd) {
-        plannedHours +=
-          (task.plannedEnd.getTime() - task.plannedStart.getTime()) / 3_600_000;
-      }
-      if (task.actualStart && task.actualEnd) {
-        actualHours +=
-          (task.actualEnd.getTime() - task.actualStart.getTime()) / 3_600_000;
-      }
-    }
-
-    const truthScore =
-      plannedHours > 0
-        ? Math.min(100, Math.max(0, (actualHours / plannedHours) * 100))
-        : 0;
+    const { plannedHours, actualHours, truthScore } = this.computeHours(tasks);
 
     return {
       weekStart,
       weekEnd,
-      plannedHours: Number(plannedHours.toFixed(2)),
-      actualHours: Number(actualHours.toFixed(2)),
-      truthScore: Number(truthScore.toFixed(1)),
+      plannedHours,
+      actualHours,
+      truthScore,
       taskCount: tasks.length,
       completedCount: tasks.filter((t) => t.completed).length,
     };
@@ -104,7 +85,51 @@ export class TaskService {
     dayEnd.setHours(23, 59, 59, 999);
 
     const tasks = await this.repo.findByDay(userId, dayStart, dayEnd);
+    const { plannedHours, actualHours, truthScore } = this.computeHours(tasks);
 
+    return {
+      date: dayStart,
+      plannedHours,
+      actualHours,
+      truthScore,
+    };
+  }
+
+  // --- Commitment Mirror: WeeklyReceipt persistence -----------------
+
+  /**
+   * Computes the weekly summary (same as getWeeklySummary) and persists
+   * it as a WeeklyReceipt row. Re-generating for an already-saved week
+   * updates that week's receipt rather than creating a duplicate.
+   */
+  async generateWeeklyReceipt(weekStart: Date, userId: string) {
+    const weekEnd = this.addDays(weekStart, 7);
+    const tasks = await this.repo.findByWeek(userId, weekStart, weekEnd);
+    const { plannedHours, actualHours, truthScore } = this.computeHours(tasks);
+
+    const receipt = await this.repo.upsertWeeklyReceipt(userId, weekStart, {
+      plannedHours,
+      actualHours,
+      truthScore,
+    });
+
+    return {
+      ...receipt,
+      weekEnd,
+      taskCount: tasks.length,
+      completedCount: tasks.filter((t) => t.completed).length,
+    };
+  }
+
+  async listWeeklyReceipts(userId: string, page: number, limit: number) {
+    const { receipts, total } = await this.repo.findWeeklyReceipts(userId, page, limit);
+    const meta = buildPaginationMeta(total, page, limit);
+    return { receipts, meta };
+  }
+
+  // --- Private Helpers -----------------------------------------------
+
+  private computeHours(tasks: Task[]) {
     let plannedHours = 0;
     let actualHours = 0;
 
@@ -125,14 +150,17 @@ export class TaskService {
         : 0;
 
     return {
-      date: dayStart,
       plannedHours: Number(plannedHours.toFixed(2)),
       actualHours: Number(actualHours.toFixed(2)),
       truthScore: Number(truthScore.toFixed(1)),
     };
   }
 
-  // ─── Private Helpers ─────────────────────────────────────────────────────────
+  private addDays(date: Date, days: number): Date {
+    const result = new Date(date);
+    result.setDate(result.getDate() + days);
+    return result;
+  }
 
   private ensureExists(task: unknown): void {
     if (!task) {
@@ -147,7 +175,7 @@ export class TaskService {
     userId: string,
     userRole: UserRole
   ): void {
-    if (userRole === UserRole.ADMIN) return; // ADMIN bypasses ownership check
+    if (userRole === UserRole.ADMIN) return;
     if (task.createdById !== userId) {
       const error = new Error('You do not have permission to access this task.') as Error & { statusCode: number };
       error.statusCode = 403;
